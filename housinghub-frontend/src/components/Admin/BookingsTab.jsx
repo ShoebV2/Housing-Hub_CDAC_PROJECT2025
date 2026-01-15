@@ -3,21 +3,24 @@ import { API_BASE_URL } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../UI/Button';
 
+// Available booking statuses
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Completed'];
 
 const BookingsTab = () => {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState([]);
-  const [amenities, setAmenities] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [statusEdit, setStatusEdit] = useState({}); // { [bookingId]: status }
+  const { user } = useAuth(); // Get logged-in user data from AuthContext
+  const [bookings, setBookings] = useState([]); // List of bookings
+  const [amenities, setAmenities] = useState([]); // List of amenities for lookup
+  const [loading, setLoading] = useState(false); // Loading state for API calls
+  const [error, setError] = useState(''); // Error messages
+  const [statusEdit, setStatusEdit] = useState({}); // Tracks edited status per booking ID
 
+  // Prepare authorization headers for API requests
   const getAuthHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${localStorage.getItem('token')}`
   });
 
+  // Fetch all bookings from the API
   const fetchBookings = async () => {
     setLoading(true);
     try {
@@ -31,6 +34,7 @@ const BookingsTab = () => {
     setLoading(false);
   };
 
+  // Fetch list of amenities (used to show amenity name instead of ID)
   const fetchAmenities = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/amenities`, { headers: getAuthHeaders() });
@@ -38,22 +42,31 @@ const BookingsTab = () => {
       const data = await res.json();
       setAmenities(data);
     } catch {
-      setAmenities([]);
+      setAmenities([]); // In case of error, set amenities list to empty
     }
   };
 
-  useEffect(() => { fetchBookings(); fetchAmenities(); }, []);
+  // Load bookings and amenities on first render
+  useEffect(() => { 
+    fetchBookings(); 
+    fetchAmenities(); 
+  }, []);
 
+  // Track status changes in dropdown without immediately saving
   const handleStatusChange = (bookingId, status) => {
     setStatusEdit(prev => ({ ...prev, [bookingId]: status }));
   };
 
+  // Update booking status on the server
   const handleStatusUpdate = async (booking) => {
     const newStatus = statusEdit[booking.bookingId] || booking.status;
+
+    // Skip update if status hasn't changed
     if (newStatus === booking.status) return;
+
     setLoading(true);
     try {
-      // Only send fields required for update
+      // Only send the fields required for update
       const payload = {
         status: newStatus,
         paid: booking.paid,
@@ -68,13 +81,15 @@ const BookingsTab = () => {
         endTime: booking.endTime,
         amount: booking.amount
       };
+
       const res = await fetch(`${API_BASE_URL}/bookings/${booking.bookingId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
+
       if (!res.ok) throw new Error('Failed to update status');
-      fetchBookings();
+      fetchBookings(); // Refresh list after update
     } catch {
       setError('Failed to update status');
     }
@@ -84,7 +99,11 @@ const BookingsTab = () => {
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">Amenity Bookings</h2>
+
+      {/* Display error message if any */}
       {error && <div className="text-red-600 mb-2">{error}</div>}
+
+      {/* Table for booking data */}
       <div className="overflow-x-auto">
         <table className="min-w-full border text-sm">
           <thead>
@@ -101,7 +120,9 @@ const BookingsTab = () => {
           </thead>
           <tbody>
             {bookings.map(b => {
+              // Find amenity name by matching amenityId
               const amenity = amenities.find(a => a.amenityId === b.amenityId);
+
               return (
                 <tr key={b.bookingId}>
                   <td className="border px-4 py-2">{b.bookingId}</td>
@@ -111,6 +132,7 @@ const BookingsTab = () => {
                   <td className="border px-4 py-2">{b.startTime}</td>
                   <td className="border px-4 py-2">{b.endTime}</td>
                   <td className="border px-4 py-2">
+                    {/* Dropdown for selecting booking status */}
                     <select
                       value={statusEdit[b.bookingId] || b.status}
                       onChange={e => handleStatusChange(b.bookingId, e.target.value)}
@@ -123,6 +145,7 @@ const BookingsTab = () => {
                     </select>
                   </td>
                   <td className="border px-4 py-2">
+                    {/* Button to update booking status */}
                     <Button
                       type="button"
                       variant="primary"
@@ -136,8 +159,12 @@ const BookingsTab = () => {
                 </tr>
               );
             })}
+
+            {/* If no bookings exist */}
             {bookings.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-4">No bookings found.</td></tr>
+              <tr>
+                <td colSpan={8} className="text-center py-4">No bookings found.</td>
+              </tr>
             )}
           </tbody>
         </table>
